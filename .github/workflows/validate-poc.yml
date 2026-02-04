@@ -1,1 +1,60 @@
+name: Validate PoC
 
+on:
+  workflow_dispatch:
+    inputs:
+      poc_id:
+        description: 'Unique identifier for this PoC run'
+        required: true
+      poc_code:
+        description: 'Base64-encoded Solidity PoC code'
+        required: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Setup PoC
+        run: |
+          mkdir -p poc/src poc/test
+          echo '${{ inputs.poc_code }}' | base64 -d > poc/test/PoC.t.sol
+          cd poc
+          forge init --no-git --no-commit
+
+      - name: Compile
+        id: compile
+        working-directory: poc
+        run: |
+          forge build 2>&1 | tee ../build-output.txt
+          echo "status=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Run Tests
+        id: test
+        if: steps.compile.outcome == 'success'
+        working-directory: poc
+        run: |
+          forge test -vvv 2>&1 | tee ../test-output.txt
+          echo "status=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Create Result
+        run: |
+          echo '{"poc_id": "${{ inputs.poc_id }}", "compile_status": "${{ steps.compile.outcome }}", "test_status": "${{ steps.test.outcome }}"}' > result.json
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: poc-result-${{ inputs.poc_id }}
+          path: |
+            build-output.txt
+            test-output.txt
+            result.json
+          retention-days: 1
