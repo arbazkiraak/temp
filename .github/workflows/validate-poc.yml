@@ -23,10 +23,8 @@ jobs:
 
       - name: Setup PoC
         run: |
-          mkdir -p poc/src poc/test
+          forge init poc --no-git --force
           echo '${{ inputs.poc_code }}' | base64 -d > poc/test/PoC.t.sol
-          cd poc
-          forge init --no-git
 
       - name: Compile
         id: compile
